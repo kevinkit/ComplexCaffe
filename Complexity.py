@@ -1,208 +1,386 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Feb 02 14:02:28 2017
+#!/usr/bin/env python
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from google.protobuf import text_format
+import matplotlib.pyplot as plt
+import caffe
+from caffe.proto import caffe_pb2
+import math as m
 
-@author: kevinkit
 
-"""
-
-#Define the .prototxt
-filename = "deploy.prototxt";
-
-def mulvec(Vec,prefix = None):
-    mul = 1;
-    if prefix == None:
-        for i in range(0,len(Vec)):
-            mul = mul*(int(Vec[i]));
-    else:
-        for i in range(0,len(Vec)):
-            mul = mul*(float(Vec[i])/prefix);
+def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
+    dimensions = []
+    weights = [];
+    O = [];
+    dim_cnt = -1
+#   layer_cnt = 0;
+    conv_cnt = 0;
+    fc_cnt = 0;
+    pool_cnt = 0;
     
-    return mul;
+    for layer in caffe_net.layer:
+        if phase is not None:
+          included = False
+          if len(layer.include) == 0:
+            included = True
+          if len(layer.include) > 0 and len(layer.exclude) > 0:
+           raise ValueError('layer ' + layer.name + ' has both include '
+                             'and exclude specified.')
+          for layer_phase in layer.include:
+            included = included or layer_phase.phase == phase
+          for layer_phase in layer.exclude:
+           included = included and not layer_phase.phase == phase
+          if not included:
+            continue
+	if str(layer.type) == "Input":
+		print "data";
+		dim_ = [1,2,3,4];
+		dims = str(layer.input_param.shape).splitlines()
+		cnt = 0;
+		for i in range(0,len(dims)):
+			#print dims[i]
+			if "dim:" in dims[i]:
+				
+				dd = dims[i].find(":")
+				buf = dims[i];
+				dim_[cnt] = int(buf[dd + 1:len(buf)]);
+				cnt = cnt +1;
+#		print "before"
+#		print dimensions
+		dimensions.append([dim_,"input"])
+#		print "after:"
+#		print dimensions
+		dim_cnt = dim_cnt +1;
+	elif dim_cnt == -1:
+		print "not found"
+		cnt = 0;
+		dim_ = [1,2,3,4];
+		buf = str(caffe_net.input_shape).splitlines()
+		input_buf = caffe_net.input_dim
+		if len(input_buf) != 0:
+			dimensions.append([caffe_net.input_dim,"input"])
+			dim_cnt = dim_cnt +1;	
+		else:
+			for i in range(0,len(buf)):
+				if "dim:" in buf[i] or "input_dim:" in buf[i]:
+					dd = buf[i].find(":");
+					buf2 = buf[i];
+					print buf2[dd + 1:len(buf2)]
+					dim_[cnt] = int(buf2[dd +1:len(buf2)])
+					cnt = cnt +1;
+			if cnt != 0:
+				dimensions.append([dim_,"input"])
+				dim_cnt = dim_cnt +1;
+			else:
+				var = raw_input("No dimensions specified please enter the used image sizes, as following: Dimensions Width height\n");
+				dim_ = var.split()
+				if len(dim_) == 3:
+					dim_buf = [1,2,3,4];
+					for i in range(0,len(dim_)):
+						dim_buf[i+1] = int(dim_[i]);
+					dimensions.append([dim_buf,"input"]);
+					dim_cnt = dim_cnt +1;
+					
+				else:
+					print "not enough specified"
+        #Calculating dimensions
+        if layer.type == 'Convolution':
+	        conv_cnt = conv_cnt +1;	
+
+		if dim_cnt == -1:
+			print "INPUT SIZE NOT DEFINED!"
+			return -1;
+		
+		P = 1;
+		S = 1;
+		K = int(layer.convolution_param.num_output);
+		F = int(layer.convolution_param.kernel_size[0]);
+
+		try:
+			S = int(layer.convolution_param.stride[0]);
+		except IndexError:
+			try:
+				S = int(layer.convolution_param.stride)
+			except TypeError:
+				S = 1
 
 
-proto_file = open(filename,"r");
-x = proto_file.readlines();
-cnt = 0;
-layers = [];
-idxs = [];
-#num_outputs = [];
-#kernel_size = [];
-#stride = [];
-input_dims = [1,2,3,4];
+		try:
+                	P = int(layer.convolution_param.pad[0]);
+		except IndexError:
+			try:
+				P = int(layer.convolution_param.pad)
+			except TypeError:
+				P = 0
+	#	print layer.bottom
+	#	print dimensions[dim_cnt][1]
 
-for i in range(0,len(x)):
-    buf = str(x[i]);
-    
-    if "input_dim" in buf:
-        input_dims[cnt] =  int(buf[len("input_dim") +2:len(buf)])
-        cnt = cnt +1;
-        
-        if cnt == 5:
-            print "More than 4 dimensions found on input, invalid!";
-            break;
- 
-    #find layers
-    if "type" in buf:
-        #layers = get_pure(buf,layers);
-        idx =  buf.find(":");
-        layers.append(buf[idx + 1:len(buf)-1].strip());  
-        idxs.append(i);
-
-Param_strings = [];
-Param_values = [];
-
-
-current_dims = [];
-O = [];
-
-#leave out the batch size for now cause this may gets interesting later!
-current_dims = input_dims[1:len(input_dims)];
-dimensions = [];
-memory = [];
-
-#iterate over layers
-for i in range(0,len(layers)):
-    sem = 0;
-    if i != len(layers) -1:
-        #iterate over params
-        for j in range(1,20):
-            if "}" in x[idxs[i]+j]:
-                #check what was the latest layer to caclulate the dimensions of the input
-                if last_layer == "Conv":
-                    print "calc conv data";
-                    #Do computation for conv here;
-                    
-                    #Calculate resulting output dimensions
-                    W = 1+(int(current_dims[1]) - (int(kernel_size)) + 2*int(pad))/(int(stride));
-                    H = 1+(int(current_dims[2]) - (int(kernel_size)) + 2*int(pad))/(int(stride));
-                    D = int(filter_amount.strip());
-
-                    #Till now no seperation of MUL and ADD, just simply take the complexity
-                    O_conv = int(mulvec(current_dims)*int(current_dims[2]+int(pad))*int(kernel_size))*int(kernel_size)/int(stride);
-                    print "complexity conv " + str(O_conv/1000000) + " MOps";
-                    O.append(O_conv);
-                    
-                    current_dims = [D,W,H];
-                    dimensions.append(current_dims);    
-                    memory.append(mulvec(current_dims));
-                    #Add complexity for conv to overall complexity
-                elif last_layer == "Pool":
-                    print "Calc Pool data";
-                    if Pool_type == 'AVG':
-                        O_pool = int(mulvec(current_dims)*int(kernel_size)*int(kernel_size))/int(stride);
-                    else:
-                        O_pool = mulvec(current_dims);
-                        
-                        
-                        
-                    W = 1+(int(current_dims[1]) - (int(kernel_size)))/(int(stride)); 
-                    H = 1+(int(current_dims[2]) - (int(kernel_size)))/(int(stride)); 
-                    D = int(current_dims[0])
-                    
-                    
-                    
-                    
-                    current_dims = [D,W,H];
-                    dimensions.append(current_dims); 
-                    memory.append(mulvec(current_dims));
-                    
-                    O.append(O_pool);                
+		found = False
+		if dim_cnt == 0:
+			dim_buf = dimensions[0][0];
+			found = True
+		else:
+			found = False
+			for i in range(0,dim_cnt +1):
+				
+	#		print "searching for: " + str(layer.bottom[0]) 
+	#			print "but got:       " + str(dimensions[dim_cnt -i][1]);
+	#			print layer.bottom
+				if str(layer.bottom[0]) == dimensions[dim_cnt - i][1]:
+					dim_buf = dimensions[dim_cnt -1][0]
+					print '\033[93m' + "found match" + '\033[0m'
+					found = True
+					break;
+				else:
+					print '\033[91m' + "still looking" + '\033[0m'
+			if not found:
+                        	print '\033[95m' + "no match!!!" + "\033[0m"
+                        	print "dims are:" + str(dim_cnt)
 
 
-                elif last_layer == "Relu":
-                    if Leaky:
-                        O_leaky = mulvec(current_dims);
-                        O.append(O_leaky);
-                elif last_layer == "lrn":
-                    print "calculate lrn data";
-                    O_lrn = local_size*mulvec(current_dims);
-                    O.append(O_lrn);
-                elif last_layer == "fc":
-                    print "calculate fully connected data";
-                    O_fc = int(fcout)*mulvec(current_dims);
-                    O.append(O_fc);
-                    current_dims = [1,1,int(fcout)];
-                elif last_layer == "Dropout":
-                    print "Dropout is not used in deployment, therefore not included in calc";
-          #      elif last_layer == "Softmax":
-          #          print "calculate softmax data";
-                
-                    
 
-                
-                break;
-            
-            #Maybe more layers that do not have any kind of parameters must be added here, for now this should do the trick
-            if "param" in x[idxs[i]+j] or layers[i] == "RELU"  or  layers[i] == '"Relu"' or layers[i] == "Relu":
-                sem = 1;
-            
-               
-            #Collect params for layer
-            if sem == 1:
-                buf = x[idxs[i]+j];
-                idx =  buf.find(":");
-                no_space = buf[0:idx].strip();
-                Param_strings.append(no_space);    
-                Param_values.append(buf[idx + 1:len(buf)-1])
-                
-                #Collection data for Conv...
-                if layers[i] == "CONVOLUTION" or  layers[i] == '"Convolution"' or layers[i] == "Convolution":
-                    last_layer = "Conv";
-                    
-                    #fill in optional params with default values:
-                    stride =1;
-                    pad = 0;
-                    group = 1;
-                    if Param_strings[len(Param_strings)-1] == "num_output":
-                       filter_amount = Param_values[len(Param_values)-1].strip();
-                    if Param_strings[len(Param_strings)-1] == "kernel_size":
-                        kernel_size = Param_values[len(Param_values)-1].strip();
-                    if Param_strings[len(Param_strings)-1] == "stride":
-                        stride = Param_values[len(Param_values)-1].strip();
-                    if Param_strings[len(Param_strings)-1] == "pad":
-                        pad = Param_values[len(Param_values)-1].strip();                
-                    if Param_strings[len(Param_strings)-1] == "group":
-                        group = Param_values[len(Param_values)-1].strip();                
-                
-                #Relu                                 
-                elif layers[i] == "RELU" or  layers[i] == '"Relu"' or layers[i] == "Relu":
-                    last_layer = "Relu";
-                    Leaky = False;
-                    
-                    #need to do stuff with leaky relu, cause this will have slightly more operations
-                    if Param_strings[len(Param_strings)-1] == "negative_slope":
-                        Leaky = True;
-                elif layers[i] == "LRN" or  layers[i] == '"Lrn"' or layers[i] == "Lrn":
-                    last_layer = "lrn";        
-                    local_size = 5;
-                    if Param_strings[len(Param_strings)-1] == "local_size":
-                        local_size =  Param_values[len(Param_values)-1].strip();
-                #Pooling
-                elif layers[i] == "POOLING" or  layers[i] == '"Pooling"' or layers[i] == "Pooling":
-                    last_layer = "Pool";                    
-                    if Param_strings[len(Param_strings)-1] == "pool":
-                        Pool_type = Param_values[len(Param_values)-1].strip();
-                 
-                    if Param_strings[len(Param_strings)-1] == "kernel_size":
-                        kernel_size = Param_values[len(Param_values)-1].strip();                          
-                #Full connected        
-                elif layers[i] == "INNER_PRODUCT" or  layers[i] == '"InnerProduct"' or layers[i] == "InnerProduct":
-                    last_layer = "fc";
-                    if Param_strings[len(Param_strings)-1] == "num_output":
-                       fcout = Param_values[len(Param_values)-1].strip();
-                #Dropout - NOT USED IN DEPLOYMENET!!! CAREFUL!
-                elif layers[i] == "DROPOUT" or  layers[i] == '"Dropout"' or layers[i] == "Dropout":
-                    last_layer = "Dropout";
-                    if Param_strings[len(Param_strings)-1] == "dropout_ratio":
-                       drop_ratio = Param_values[len(Param_values)-1].strip();
-                #Softmax
-                elif layers[i] == "SOFTMAX" or  layers[i] == '"Softmax"' or layers[i] == "Softmax":
-                    last_layer = "Softmax";
-                
-         
-                                                   
-       #     print x[idxs[i]+j]
+
+		if found:
+			weight_buf = [1,2,3];
+			weight_buf[0] = K;
+			weight_buf[1] = F;
+			weight_buf[2] = F;
+			weights.append(weight_buf);
+
+			W = 1 + ((dim_buf[2] - F + 2*P)/S)
+			H = 1 + ((dim_buf[3] - F + 2*P)/S);
+			D = K
+			
+			#print str(K) + "x" + str(F) + "x" + str(F) + " P: " + str(P) + " S: " + str(S) 	
+
+			O_buf = K*((dim_buf[1]*(dim_buf[2]+P)*dim_buf[3]+P)*F*F)/S
+			O.append(O_buf);
+			n_dim_buf = [1,2,3,4]
+			n_dim_buf[1] = D;
+			n_dim_buf[2] = W;
+			n_dim_buf[3] = H;
+			dim_cnt = dim_cnt +1;
+			dimensions.append([n_dim_buf,layer.name]);
+	if layer.type == "SoftmaxWithLoss":
+		O_buf = max(dim_buf[1],dim_buf[2],dim_buf[3])
+		O.append(O_buf)
+
+	if layer.type == "lrn" or layer.type == "LRN":
+		local_size = int(layer.lrn_param.local_size)
+		dim_buf = dimensions[dim_cnt][0];
+		O_buf = local_size*dim_buf[1]*dim_buf[2]*dim_buf[3];
+ 		O.append(O_buf);
+		dimensions.append([dimensions[dim_cnt][0],layer.name])
+		dim_cnt = dim_cnt +1
+	if layer.type == "Concat":
+		bottom_buf = layer.bottom
+		dim_buf = dimensions[dim_cnt][0]
+
+                found = False
+
+		for i in range(0,len(bottom_buf)):
+			bottom_buf1 = bottom_buf[i];
+                        for i in range(0,dim_cnt+2):
+                               	if str(bottom_buf1) == dimensions[dim_cnt - i][1]:
+                    	          	dim_buf = dimensions[dim_cnt -1][0]
+                                       	print '\033[93m' + "found match" + '\033[0m'
+                                       	found = True
+					break;
+                               	else:
+                        		print dimensions[dim_cnt -i][1]      
+			         	print '\033[91m' + "still looking" + '\033[0m'
+
+			if not found:
+				print '\033[95m' + "no match!!!" + "\033[0m"
+
+		if not found:
+			print '\033[95m' + "no match!!!" + "\033[0m"
+			print "dims are:" + str(dim_cnt)
+
+	
+		dimensions.append([dimensions[dim_cnt][0],layer.name]);
+		dim_cnt = dim_cnt +1;
+		
+	if layer.type == 'ReLU':
+		if len(str(layer.relu_param)) == 0:
+			O_buf = 1;
+		else:
+			O_buf = dim_buf[1] * dim_buf[2] * dim_buf[3]
+			O.append(O_buf);
+		dimensions.append([dimensions[dim_cnt][0],layer.name])
+		dim_cnt = dim_cnt +1
+	if layer.type == 'Scale':
+		O_buf = dim_buf[1] + dim_buf[2] + dim_buf[3]
+		O.append(O_buf);
+                bottom_buf = layer.bottom[0]
+                dim_buf = dimensions[dim_cnt][0]
+
+                found = False
+
+                for i in range(0,dim_cnt):
+                        if str(bottom_buf1) == dimensions[dim_cnt - i][1]:
+        	                dim_buf = dimensions[dim_cnt -1][0]
+                                print '\033[93m' + "found match" + '\033[0m'
+                                found = True
+                                break;
+                        else:
+                                print dimensions[dim_cnt -i][1]
+                                print '\033[91m' + "still looking" + '\033[0m'
+
+
+                if not found:
+                        print '\033[95m' + "no match!!!" + "\033[0m"
+                        print "dims are:" + str(dim_cnt)
+
+		dimensions.append([dim_buf],layer.name)
+
+
+	if layer.type == 'BatchNorm':
+		dimensions.append([dimensions[dim_cnt][0],layer.name])
+		dim_cnt = dim_cnt +1
+	if layer.type == 'Pooling':
+		pool_cnt = pool_cnt +1;
+		dim_buf = dimensions[dim_cnt][0];
+		if bool(layer.pooling_param.global_pooling):
+			print layer.pooling_param.pool
+			#I do not know
+			O_buf = m.square(dim_buf[1]*dim_buf[2]*dim_buf[3])
+		else:
+			S = 1;	
+			F = int(layer.pooling_param.kernel_size);
+	                S = int(layer.pooling_param.stride);
+			W = 1 + ((dim_buf[2] - F)/S)
+			H = 1 + ((dim_buf[3] - F)/S)
+	                found = False
+                found = False
+		if dim_cnt == 0:
+			dim_buf = dimensions[0][0]
+			found = True;
+		for i in range(0,dim_cnt+1):
+                        print layer.bottom
+                        if str(layer.bottom[0]) == dimensions[dim_cnt - i][1]:
+                        	dim_buf = dimensions[dim_cnt -1][0]
+                                print '\033[93m' + "found match" + '\033[0m'
+                                found = True
+                                break;
+                        else:
+                                print '\033[91m' + "still looking" + '\033[0m'
+
+                if not found:
+                        print '\033[95m' + "no match!!!" + "\033[0m"
+                        print "dims are:" + str(dim_cnt)
+
+
+		#print str(W) + "=" + "1 +" + "((" + str(dim_buf[2]) + " - " + str(F) + ")/" + str(S) + ")";
+		#print str(W) + "=" + "1 +" + "((" + str(dim_buf[3]) + " - " + str(F) + ")/" + str(S) + ")";
+
+	
+		ty =  layer.pooling_param.pool
+
+		if ty == 0:
+			O_buf = K*((dim_buf[1]*(dim_buf[2])*dim_buf[3]))/S
+		elif ty == 1:
+			O_buf =  K*((dim_buf[1]*(dim_buf[2])*dim_buf[3])*F*F)/S
+		elif ty == 2:	
+			O_buf =  K*((dim_buf[1]*(dim_buf[2])*dim_buf[3])*F*F)/S
+
+		dim_buf[2] = W;
+		dim_buf[3] = H;
+		dimensions.append([dim_buf,layer.name]) 
+		dim_cnt = dim_cnt +1;
+		O.append(O_buf)
+	if layer.type == 'InnerProduct':
+		fc_cnt = fc_cnt +1;
+		O_buf = dim_buf[1]*dim_buf[2]*dim_buf[3]*int(layer.inner_product_param.num_output)
+		weight_buf = [1,2,3];
+		weight_buf[0] = O_buf;
+		weight_buf[1] = 1;
+		weight_buf[2] = 1;
+		weights.append(weight_buf)
+		dim_buf = [1,int(layer.inner_product_param.num_output),1,1]
+		dimensions.append([dim_buf,layer.name]);
+		dim_cnt = dim_cnt +1;
+		O.append(O_buf)
+
+ #       if dim_cnt != -1:
+#		print dimensions[dim_cnt][0]
+#		print dim_cnt
+
+#                       label=edge['label']))
+    plt.figure(0)
+    plt.plot(O);
+    plt.savefig("complex.png")
+    memory_dim = [];
+    memory_w = [];
+#    print "dimensions:"
+    for i in range(0,len(dimensions)):
+	memo_buf = dimensions[i][0]
+	print dimensions[i]
+#	print memo_buf
+    	memory_dim.append(memo_buf[1]*memo_buf[2]*memo_buf[3])
+
+#    print "Complexities:"
+#    for i in range(0,len(O)):
+#	print O[i];
+
+#    print "Memore in weights"
+    for i in range(0,len(weights)):
+	memory_buf = weights[i]
+#	print memory_buf
+	memory_w.append(memory_buf[0]*memory_buf[1]*memory_buf[2])
+
+    print "O: " + str(sum(O)/1000000000.)
+    print "M(f): " + str(sum(memory_dim)/1000000000.)
+    print "M(W): "+ str(sum(memory_w)/1000000000.)
+    print "Conv-Layers: " + str(conv_cnt) + " Pooling-Layers: " + str(pool_cnt) +  " Fully-Connected: " + str(fc_cnt)
+
+    plt.figure(1)
+    plt.plot(memory_dim)
+
+    plt.savefig("dims.png");
+    return found
+
+def parse_args():
+    """Parse input arguments
+    """
+
+    parser = ArgumentParser(description=__doc__,
+                            formatter_class=ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument('input_net_proto_file',
+                        help='Input network prototxt file')
+    parser.add_argument('--rankdir',
+                        help=('One of TB (top-bottom, i.e., vertical), '
+                              'RL (right-left, i.e., horizontal), or another '
+                              'valid dot option; see '
+                              'http://www.graphviz.org/doc/info/'
+                              'attrs.html#k:rankdir'),
+                        default='LR')
+    parser.add_argument('--phase',
+                        help=('Which network phase to calculate: can be TRAIN, '
+                              'TEST, or ALL.  If ALL, then all layers are calculated '
+                              'regardless of phase. This option is not implemented at the moment'),
+                        default="ALL")
+
+    args = parser.parse_args()
+    return args
+
+
+def main():
+    args = parse_args()
+    net = caffe_pb2.NetParameter()
+    text_format.Merge(open(args.input_net_proto_file).read(), net)
+ #   print('Drawing net to %s' % args.output_image_file)
+    phase=None;
+    if args.phase == "TRAIN":
+        phase = caffe.TRAIN
+    elif args.phase == "TEST":
+        phase = caffe.TEST
+    elif args.phase != "ALL":
+        raise ValueError("Unknown phase: " + args.phase)
+    if not get_pydot_graph(net, args.rankdir, phase):
+	print "fatal error!"
     else:
-        if  layers[i] == "SOFTMAX" or  layers[i] == '"Softmax"' or layers[i] == "Softmax":
-            print "calc softmax";
+	print "Calculation varified"
+if __name__ == '__main__':
+    main()
+
