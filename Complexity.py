@@ -1,13 +1,23 @@
 #!/usr/bin/env python
+import subprocess
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from google.protobuf import text_format
 import matplotlib.pyplot as plt
-import caffe
+#import caffe
+
+try:
+	from caffe.proto import caffe_pb2
+except ImportError:
+	bashCommand = "pip install scikit-image"
+	process = subprocess.Popen(bashCommand.split(),stdout=subprocess.PIPE);
+	output,error = process.communicate()
+
 from caffe.proto import caffe_pb2
+import caffe	
 import math as m
 
 
-def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
+def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
     dimensions = []
     weights = [];
     O = [];
@@ -16,7 +26,7 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
     conv_cnt = 0;
     fc_cnt = 0;
     pool_cnt = 0;
-    
+   
     for layer in caffe_net.layer:
         if phase is not None:
           included = False
@@ -44,9 +54,8 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 				buf = dims[i];
 				dim_[cnt] = int(buf[dd + 1:len(buf)]);
 				cnt = cnt +1;
-#		print "before"
 #		print dimensions
-		dimensions.append([dim_,"input"])
+		dimensions.append([dim_,"input",True])
 #		print "after:"
 #		print dimensions
 		dim_cnt = dim_cnt +1;
@@ -56,8 +65,9 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 		dim_ = [1,2,3,4];
 		buf = str(caffe_net.input_shape).splitlines()
 		input_buf = caffe_net.input_dim
+		print input_buf
 		if len(input_buf) != 0:
-			dimensions.append([caffe_net.input_dim,"input"])
+			dimensions.append([caffe_net.input_dim,"input",True])
 			dim_cnt = dim_cnt +1;	
 		else:
 			for i in range(0,len(buf)):
@@ -68,7 +78,7 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 					dim_[cnt] = int(buf2[dd +1:len(buf2)])
 					cnt = cnt +1;
 			if cnt != 0:
-				dimensions.append([dim_,"input"])
+				dimensions.append([dim_,"input",True])
 				dim_cnt = dim_cnt +1;
 			else:
 				var = raw_input("No dimensions specified please enter the used image sizes, as following: Dimensions Width height\n");
@@ -77,11 +87,13 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 					dim_buf = [1,2,3,4];
 					for i in range(0,len(dim_)):
 						dim_buf[i+1] = int(dim_[i]);
-					dimensions.append([dim_buf,"input"]);
+					dimensions.append([dim_buf,"input", True]);
 					dim_cnt = dim_cnt +1;
 					
 				else:
 					print "not enough specified"
+	else:
+		print str(dim_cnt) + "so many dims"
         #Calculating dimensions
         if layer.type == 'Convolution':
 	        conv_cnt = conv_cnt +1;	
@@ -102,8 +114,6 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 				S = int(layer.convolution_param.stride)
 			except TypeError:
 				S = 1
-
-
 		try:
                 	P = int(layer.convolution_param.pad[0]);
 		except IndexError:
@@ -126,7 +136,7 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 	#			print "but got:       " + str(dimensions[dim_cnt -i][1]);
 	#			print layer.bottom
 				if str(layer.bottom[0]) == dimensions[dim_cnt - i][1]:
-					dim_buf = dimensions[dim_cnt -1][0]
+					dim_buf = dimensions[dim_cnt -i][0]
 					print '\033[93m' + "found match" + '\033[0m'
 					found = True
 					break;
@@ -135,9 +145,6 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 			if not found:
                         	print '\033[95m' + "no match!!!" + "\033[0m"
                         	print "dims are:" + str(dim_cnt)
-
-
-
 
 		if found:
 			weight_buf = [1,2,3];
@@ -159,7 +166,7 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 			n_dim_buf[2] = W;
 			n_dim_buf[3] = H;
 			dim_cnt = dim_cnt +1;
-			dimensions.append([n_dim_buf,layer.name]);
+			dimensions.append([n_dim_buf,layer.name,found]);
 	if layer.type == "SoftmaxWithLoss":
 		O_buf = max(dim_buf[1],dim_buf[2],dim_buf[3])
 		O.append(O_buf)
@@ -169,7 +176,7 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 		dim_buf = dimensions[dim_cnt][0];
 		O_buf = local_size*dim_buf[1]*dim_buf[2]*dim_buf[3];
  		O.append(O_buf);
-		dimensions.append([dimensions[dim_cnt][0],layer.name])
+		dimensions.append([dimensions[dim_cnt][0],layer.name, True])
 		dim_cnt = dim_cnt +1
 	if layer.type == "Concat":
 		bottom_buf = layer.bottom
@@ -181,7 +188,7 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 			bottom_buf1 = bottom_buf[i];
                         for i in range(0,dim_cnt+2):
                                	if str(bottom_buf1) == dimensions[dim_cnt - i][1]:
-                    	          	dim_buf = dimensions[dim_cnt -1][0]
+                    	          	dim_buf = dimensions[dim_cnt -i][0]
                                        	print '\033[93m' + "found match" + '\033[0m'
                                        	found = True
 					break;
@@ -197,7 +204,7 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 			print "dims are:" + str(dim_cnt)
 
 	
-		dimensions.append([dimensions[dim_cnt][0],layer.name]);
+		dimensions.append([dimensions[dim_cnt][0],layer.name, found]);
 		dim_cnt = dim_cnt +1;
 		
 	if layer.type == 'ReLU':
@@ -206,44 +213,50 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 		else:
 			O_buf = dim_buf[1] * dim_buf[2] * dim_buf[3]
 			O.append(O_buf);
-		dimensions.append([dimensions[dim_cnt][0],layer.name])
+		dimensions.append([dimensions[dim_cnt][0],layer.name, True])
 		dim_cnt = dim_cnt +1
 	if layer.type == 'Scale':
 		O_buf = dim_buf[1] + dim_buf[2] + dim_buf[3]
 		O.append(O_buf);
-                bottom_buf = layer.bottom[0]
+                bottom_buf1 = layer.bottom[0]
                 dim_buf = dimensions[dim_cnt][0]
 
                 found = False
 
-                for i in range(0,dim_cnt):
+                for i in range(0,dim_cnt+1):
                         if str(bottom_buf1) == dimensions[dim_cnt - i][1]:
-        	                dim_buf = dimensions[dim_cnt -1][0]
+        	                dim_buf = dimensions[dim_cnt -i][0]
                                 print '\033[93m' + "found match" + '\033[0m'
                                 found = True
                                 break;
                         else:
-                                print dimensions[dim_cnt -i][1]
-                                print '\033[91m' + "still looking" + '\033[0m'
+                                print "got " +  dimensions[dim_cnt -i][1] + " looking for " + bottom_buf1
+                         
+			        print '\033[91m' + "still looking" + '\033[0m'
 
 
                 if not found:
                         print '\033[95m' + "no match!!!" + "\033[0m"
                         print "dims are:" + str(dim_cnt)
 
-		dimensions.append([dim_buf],layer.name)
-
+		dimensions.append([dim_buf,layer.name, found])
+		dim_cnt = dim_cnt +1
 
 	if layer.type == 'BatchNorm':
-		dimensions.append([dimensions[dim_cnt][0],layer.name])
+		dimensions.append([dimensions[dim_cnt][0],layer.name, True])
 		dim_cnt = dim_cnt +1
 	if layer.type == 'Pooling':
 		pool_cnt = pool_cnt +1;
 		dim_buf = dimensions[dim_cnt][0];
+		found = False;
 		if bool(layer.pooling_param.global_pooling):
 			print layer.pooling_param.pool
 			#I do not know
-			O_buf = m.square(dim_buf[1]*dim_buf[2]*dim_buf[3])
+			O_buf = m.pow(dim_buf[1]*dim_buf[2]*dim_buf[3],2)
+			#hack, simply wrong!
+			dimensions.append([dim_buf,layer.name, True]);
+			dim_cnt = dim_cnt +1;
+			found = True;
 		else:
 			S = 1;	
 			F = int(layer.pooling_param.kernel_size);
@@ -251,14 +264,13 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 			W = 1 + ((dim_buf[2] - F)/S)
 			H = 1 + ((dim_buf[3] - F)/S)
 	                found = False
-                found = False
 		if dim_cnt == 0:
 			dim_buf = dimensions[0][0]
 			found = True;
 		for i in range(0,dim_cnt+1):
                         print layer.bottom
                         if str(layer.bottom[0]) == dimensions[dim_cnt - i][1]:
-                        	dim_buf = dimensions[dim_cnt -1][0]
+                        	dim_buf = dimensions[dim_cnt -i][0]
                                 print '\033[93m' + "found match" + '\033[0m'
                                 found = True
                                 break;
@@ -285,7 +297,7 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 
 		dim_buf[2] = W;
 		dim_buf[3] = H;
-		dimensions.append([dim_buf,layer.name]) 
+		dimensions.append([dim_buf,layer.name, found]) 
 		dim_cnt = dim_cnt +1;
 		O.append(O_buf)
 	if layer.type == 'InnerProduct':
@@ -297,11 +309,18 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
 		weight_buf[2] = 1;
 		weights.append(weight_buf)
 		dim_buf = [1,int(layer.inner_product_param.num_output),1,1]
-		dimensions.append([dim_buf,layer.name]);
+		dimensions.append([dim_buf,layer.name, True]);
 		dim_cnt = dim_cnt +1;
 		O.append(O_buf)
-
- #       if dim_cnt != -1:
+	if layer.type == 'Eltwise':
+		dimensions.append([dimensions[dim_cnt][0],layer.name, True]);
+		dim_cnt = dim_cnt +1
+		O.append(sum(dim_buf))
+	if 'found' in locals():
+		if found == False:
+			print "looking for:  " +  layer.bottom[0] + " failed"
+			print "and i am : " + layer.name + " " + layer.type 
+#       if dim_cnt != -1:
 #		print dimensions[dim_cnt][0]
 #		print dim_cnt
 
@@ -337,6 +356,9 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
     plt.plot(memory_dim)
 
     plt.savefig("dims.png");
+    for i in range(1,len(dimensions)):
+    	found = dimensions[i -1] and dimensions[i][2]
+
     return found
 
 def parse_args():
@@ -377,10 +399,9 @@ def main():
         phase = caffe.TEST
     elif args.phase != "ALL":
         raise ValueError("Unknown phase: " + args.phase)
-    if not get_pydot_graph(net, args.rankdir, phase):
+    if not calc_com(net, args.rankdir, phase):
 	print "fatal error!"
     else:
 	print "Calculation varified"
 if __name__ == '__main__':
     main()
-
