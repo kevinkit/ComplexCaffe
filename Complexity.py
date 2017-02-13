@@ -121,8 +121,6 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 				P = int(layer.convolution_param.pad)
 			except TypeError:
 				P = 0
-	#	print layer.bottom
-	#	print dimensions[dim_cnt][1]
 
 		found = False
 		if dim_cnt == 0:
@@ -132,9 +130,6 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 			found = False
 			for i in range(0,dim_cnt +1):
 				
-	#		print "searching for: " + str(layer.bottom[0]) 
-	#			print "but got:       " + str(dimensions[dim_cnt -i][1]);
-	#			print layer.bottom
 				if str(layer.bottom[0]) == dimensions[dim_cnt - i][1]:
 					dim_buf = dimensions[dim_cnt -i][0]
 					print '\033[93m' + "found match" + '\033[0m'
@@ -152,12 +147,11 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 			weight_buf[1] = F;
 			weight_buf[2] = F;
 			weights.append(weight_buf);
-
-			W = 1 + ((dim_buf[2] - F + 2*P)/S)
-			H = 1 + ((dim_buf[3] - F + 2*P)/S);
+			print "using dimensions " + str(dim_buf) + "and filter params: " + str(weight_buf) + " S: " + str(S) + " P: " + str(P)
+			W = 1 + ((dim_buf[2] - F + (2*P))/S)
+			H = 1 + ((dim_buf[3] - F + (2*P))/S);
 			D = K
-			
-			#print str(K) + "x" + str(F) + "x" + str(F) + " P: " + str(P) + " S: " + str(S) 	
+			print W,H,D	
 
 			O_buf = K*((dim_buf[1]*(dim_buf[2]+P)*dim_buf[3]+P)*F*F)/S
 			O.append(O_buf);
@@ -166,6 +160,7 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 			n_dim_buf[2] = W;
 			n_dim_buf[3] = H;
 			dim_cnt = dim_cnt +1;
+			print n_dim_buf
 			dimensions.append([n_dim_buf,layer.name,found]);
 	if layer.type == "SoftmaxWithLoss":
 		O_buf = max(dim_buf[1],dim_buf[2],dim_buf[3])
@@ -179,18 +174,20 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 		dimensions.append([dimensions[dim_cnt][0],layer.name, True])
 		dim_cnt = dim_cnt +1
 	if layer.type == "Concat":
+		print "concat"
 		bottom_buf = layer.bottom
-		dim_buf = dimensions[dim_cnt][0]
 
                 found = False
-
+		dimensions_counter = 0;
 		for i in range(0,len(bottom_buf)):
 			bottom_buf1 = bottom_buf[i];
-                        for i in range(0,dim_cnt+2):
+                        for i in range(0,dim_cnt+1):
                                	if str(bottom_buf1) == dimensions[dim_cnt - i][1]:
                     	          	dim_buf = dimensions[dim_cnt -i][0]
                                        	print '\033[93m' + "found match" + '\033[0m'
-                                       	found = True
+			             	found = True
+					dimensions_counter = dimensions_counter + dim_buf[1];
+					print "filter has " + str(dim_buf[1]) + " dims";
 					break;
                                	else:
                         		print dimensions[dim_cnt -i][1]      
@@ -204,7 +201,11 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 			print "dims are:" + str(dim_cnt)
 
 	
-		dimensions.append([dimensions[dim_cnt][0],layer.name, found]);
+		n_dim_buf = [1,2,3,4];
+		n_dim_buf[1] = dimensions_counter;
+		n_dim_buf[2] = dim_buf[2];
+		n_dim_buf[3] = dim_buf[3];
+		dimensions.append([n_dim_buf,layer.name, found]);
 		dim_cnt = dim_cnt +1;
 		
 	if layer.type == 'ReLU':
@@ -213,6 +214,7 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 		else:
 			O_buf = dim_buf[1] * dim_buf[2] * dim_buf[3]
 			O.append(O_buf);
+		print "adding as dim: " + str(dimensions[dim_cnt][0])
 		dimensions.append([dimensions[dim_cnt][0],layer.name, True])
 		dim_cnt = dim_cnt +1
 	if layer.type == 'Scale':
@@ -258,46 +260,46 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 			dim_cnt = dim_cnt +1;
 			found = True;
 		else:
-			S = 1;	
 			F = int(layer.pooling_param.kernel_size);
 	                S = int(layer.pooling_param.stride);
-			W = 1 + ((dim_buf[2] - F)/S)
-			H = 1 + ((dim_buf[3] - F)/S)
+			P = int(layer.pooling_param.pad);
 	                found = False
-		if dim_cnt == 0:
-			dim_buf = dimensions[0][0]
-			found = True;
-		for i in range(0,dim_cnt+1):
-                        print layer.bottom
-                        if str(layer.bottom[0]) == dimensions[dim_cnt - i][1]:
-                        	dim_buf = dimensions[dim_cnt -i][0]
-                                print '\033[93m' + "found match" + '\033[0m'
-                                found = True
-                                break;
-                        else:
-                                print '\033[91m' + "still looking" + '\033[0m'
+			if dim_cnt == 0:
+				dim_buf = dimensions[0][0]
+				found = True;
+			for i in range(0,dim_cnt+1):
+        	                print layer.bottom
+                	        if str(layer.bottom[0]) == dimensions[dim_cnt - i][1]:
+                        		dim_buf = dimensions[dim_cnt -i][0]
+                                	print '\033[93m' + "found match" + '\033[0m'
+                              	        found = True
+                                	break;
+                  		else:
+                        	        print '\033[91m' + "still looking" + '\033[0m'
 
-                if not found:
-                        print '\033[95m' + "no match!!!" + "\033[0m"
-                        print "dims are:" + str(dim_cnt)
+  	                if not found:
+                        	print '\033[95m' + "no match!!!" + "\033[0m"
+                       	        print "dims are:" + str(dim_cnt)
 
 
-		#print str(W) + "=" + "1 +" + "((" + str(dim_buf[2]) + " - " + str(F) + ")/" + str(S) + ")";
-		#print str(W) + "=" + "1 +" + "((" + str(dim_buf[3]) + " - " + str(F) + ")/" + str(S) + ")";
+                        W = 1 + ((dim_buf[2] - F + (2*P))/S)
+                        H = 1 + ((dim_buf[3] - F + (2*P))/S)
+			#print str(W) + "=" + "1 +" + "((" + str(dim_buf[2]) + " - " + str(F) + ")/" + str(S) + ")";
+			#print str(W) + "=" + "1 +" + "((" + str(dim_buf[3]) + " - " + str(F) + ")/" + str(S) + ")";
+			ty =  layer.pooling_param.pool
 
-	
-		ty =  layer.pooling_param.pool
+			if ty == 0:
+				O_buf = K*((dim_buf[1]*(dim_buf[2])*dim_buf[3]))/S
+			elif ty == 1:
+				O_buf =  K*((dim_buf[1]*(dim_buf[2])*dim_buf[3])*F*F)/S
+			elif ty == 2:	
+				O_buf =  K*((dim_buf[1]*(dim_buf[2])*dim_buf[3])*F*F)/S
 
-		if ty == 0:
-			O_buf = K*((dim_buf[1]*(dim_buf[2])*dim_buf[3]))/S
-		elif ty == 1:
-			O_buf =  K*((dim_buf[1]*(dim_buf[2])*dim_buf[3])*F*F)/S
-		elif ty == 2:	
-			O_buf =  K*((dim_buf[1]*(dim_buf[2])*dim_buf[3])*F*F)/S
-
-		dim_buf[2] = W;
-		dim_buf[3] = H;
-		dimensions.append([dim_buf,layer.name, found]) 
+		n_dim_buf = [1,2,3,4];
+		n_dim_buf[1] = dim_buf[1];
+		n_dim_buf[2] = W;
+		n_dim_buf[3] = H;
+		dimensions.append([n_dim_buf,layer.name, found]) 
 		dim_cnt = dim_cnt +1;
 		O.append(O_buf)
 	if layer.type == 'InnerProduct':
