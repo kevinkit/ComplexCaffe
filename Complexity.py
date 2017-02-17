@@ -148,10 +148,9 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 			weight_buf[2] = F;
 			weights.append(weight_buf);
 			print "using dimensions " + str(dim_buf) + "and filter params: " + str(weight_buf) + " S: " + str(S) + " P: " + str(P)
-			W = 1 + ((dim_buf[2] - F + (2*P))/S)
-			H = 1 + ((dim_buf[3] - F + (2*P))/S);
+			W = m.ceil(float(1 + ((dim_buf[2] - F + (2*P))/S)))
+			H = m.ceil(float(1 + ((dim_buf[3] - F + (2*P))/S)));
 			D = K
-			print W,H,D	
 
 			O_buf = K*((dim_buf[1]*(dim_buf[2]+P)*dim_buf[3]+P)*F*F)/S
 			O.append(O_buf);
@@ -160,7 +159,6 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 			n_dim_buf[2] = W;
 			n_dim_buf[3] = H;
 			dim_cnt = dim_cnt +1;
-			print n_dim_buf
 			dimensions.append([n_dim_buf,layer.name,found]);
 	if layer.type == "SoftmaxWithLoss":
 		O_buf = max(dim_buf[1],dim_buf[2],dim_buf[3])
@@ -282,8 +280,8 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
                        	        print "dims are:" + str(dim_cnt)
 
 
-                        W = 1 + ((dim_buf[2] - F + (2*P))/S)
-                        H = 1 + ((dim_buf[3] - F + (2*P))/S)
+                        W = m.ceil(1 + ((dim_buf[2] - F + (2*P))/S))
+                        H = m.ceil(1 + ((dim_buf[3] - F + (2*P))/S))
 			#print str(W) + "=" + "1 +" + "((" + str(dim_buf[2]) + " - " + str(F) + ")/" + str(S) + ")";
 			#print str(W) + "=" + "1 +" + "((" + str(dim_buf[3]) + " - " + str(F) + ")/" + str(S) + ")";
 			ty =  layer.pooling_param.pool
