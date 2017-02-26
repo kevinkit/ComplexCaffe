@@ -163,7 +163,7 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 			dim_cnt = dim_cnt +1;
 			dimensions.append([n_dim_buf,layer.name,found]);
 	#Softmax
-	if layer.type == "SoftmaxWithLoss":
+	if layer.type == "SoftmaxWithLoss" or layer.type == "Softmax":
 		O_buf = max(dim_buf[1],dim_buf[2],dim_buf[3])
 		O.append(O_buf)
 
