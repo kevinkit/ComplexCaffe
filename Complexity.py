@@ -41,6 +41,7 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
            included = included and not layer_phase.phase == phase
           if not included:
             continue
+	#finding inputs
 	if str(layer.type) == "Input":
 		print "data";
 		dim_ = [1,2,3,4];
@@ -95,6 +96,7 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 	else:
 		print str(dim_cnt) + "so many dims"
         #Calculating dimensions
+	#Conv
         if layer.type == 'Convolution':
 	        conv_cnt = conv_cnt +1;	
 
@@ -160,6 +162,7 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 			n_dim_buf[3] = H;
 			dim_cnt = dim_cnt +1;
 			dimensions.append([n_dim_buf,layer.name,found]);
+	#Softmax
 	if layer.type == "SoftmaxWithLoss":
 		O_buf = max(dim_buf[1],dim_buf[2],dim_buf[3])
 		O.append(O_buf)
@@ -289,9 +292,9 @@ def calc_com(caffe_net, rankdir, label_edges=True, phase=None):
 			if ty == 0:
 				O_buf = K*((dim_buf[1]*(dim_buf[2])*dim_buf[3]))/S
 			elif ty == 1:
-				O_buf =  K*((dim_buf[1]*(dim_buf[2])*dim_buf[3])*F*F)/S
+				O_buf =  K*((dim_buf[1]*(dim_buf[2]+P)*(dim_buf[3]+P))*F*F)/S
 			elif ty == 2:	
-				O_buf =  K*((dim_buf[1]*(dim_buf[2])*dim_buf[3])*F*F)/S
+				O_buf =  K*((dim_buf[1]*(dim_buf[2]+P)*(dim_buf[3]+P))*F*F)/S
 
 		n_dim_buf = [1,2,3,4];
 		n_dim_buf[1] = dim_buf[1];
